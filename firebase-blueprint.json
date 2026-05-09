@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "Shareholder": {
+      "title": "Shareholder",
+      "description": "A community member who invests monthly.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "address": { "type": "string" },
+        "joiningDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "profileImage": { "type": "string" }
+      },
+      "required": ["fullName", "status"]
+    },
+    "Installment": {
+      "title": "Installment",
+      "description": "Monthly deposit by a shareholder.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "shareholderId": { "type": "string" },
+        "amount": { "type": "number" },
+        "month": { "type": "string" },
+        "year": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Paid", "Due"] }
+      },
+      "required": ["shareholderId", "amount", "month", "year"]
+    },
+    "Fine": {
+      "title": "Fine",
+      "description": "Fine imposed on a shareholder.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "shareholderId": { "type": "string" },
+        "amount": { "type": "number" },
+        "reason": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Paid", "Unpaid"] }
+      },
+      "required": ["shareholderId", "amount"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "An investment project managed by the community.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "details": { "type": "string" },
+        "investmentAmount": { "type": "number" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Running", "Completed", "Loss", "Closed"] },
+        "expectedProfit": { "type": "number" },
+        "finalSettlement": { "type": "number" },
+        "profitLoss": { "type": "number" }
+      },
+      "required": ["name", "investmentAmount", "status"]
+    },
+    "Cost": {
+      "title": "Cost",
+      "description": "Administrative or miscellaneous costs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "category": { "type": "string" }
+      },
+      "required": ["title", "amount", "date"]
+    },
+    "Policy": {
+      "title": "Policy",
+      "description": "Community rules and regulations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" }
+      },
+      "required": ["title", "content"]
+    }
+  },
+  "firestore": {
+    "/shareholders": { "schema": "Shareholder", "description": "Collection of all shareholders" },
+    "/installments": { "schema": "Installment", "description": "Collection of all deposits" },
+    "/fines": { "schema": "Fine", "description": "Collection of all fines" },
+    "/projects": { "schema": "Project", "description": "Collection of all investment projects" },
+    "/costs": { "schema": "Cost", "description": "Collection of all expenses" },
+    "/policies": { "schema": "Policy", "description": "Collection of community policies" },
+    "/settings": { "schema": "object", "description": "Global app settings" }
+  }
+}
