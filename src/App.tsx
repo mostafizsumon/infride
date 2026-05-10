@@ -5,6 +5,9 @@ import { Toaster } from '@/components/ui/sonner';
 import { Layout } from './components/Layout';
 import { useAuthStore } from './store/useAuthStore';
 import { UserRole } from './types';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -20,7 +23,12 @@ function ProtectedRoute({ children, adminOnly = false }: { children: React.React
   const { user, loading } = useAuthStore();
 
   if (loading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-50 gap-4">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-500 font-medium italic">Initializing INFRIDE...</p>
+      </div>
+    );
   }
 
   if (!user) {
@@ -35,13 +43,45 @@ function ProtectedRoute({ children, adminOnly = false }: { children: React.React
 }
 
 export default function App() {
-  const { setLoading } = useAuthStore();
+  const { setUser, setLoading } = useAuthStore();
 
   useEffect(() => {
-    // Simulate auth check for now since we are still building
-    setTimeout(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setLoading(true);
+      if (firebaseUser) {
+        try {
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              fullName: userData.fullName || 'User',
+              role: userData.role as UserRole || UserRole.USER,
+              photoURL: firebaseUser.photoURL || undefined
+            });
+          } else {
+            // User exists in Auth but not in Firestore yet
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              role: UserRole.USER,
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
       setLoading(false);
-    }, 500);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (
