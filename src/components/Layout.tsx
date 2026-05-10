@@ -18,6 +18,9 @@ import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
+
 interface LayoutProps {
   children: ReactNode;
 }
@@ -28,9 +31,14 @@ export function Layout({ children }: LayoutProps) {
   const { settings } = useSettingsStore();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    setUser(null);
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const menuItems = [
