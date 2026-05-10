@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Users, 
   Search, 
@@ -13,7 +13,8 @@ import {
   TrendingUp,
   AlertCircle,
   FileText,
-  UserPlus
+  UserPlus,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -29,32 +30,81 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useAuthStore } from '@/store/useAuthStore';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-// Initial data as requested
-const initialShareholders = [
-  { id: '1', name: 'Mostafizur Rahman', status: 'Active', phone: '01700000001', joinDate: 'Jan 2024', totalPaid: 150000, due: 0 },
-  { id: '2', name: 'Nuruzzaman', status: 'Active', phone: '01700000002', joinDate: 'Feb 2024', totalPaid: 145000, due: 5000 },
-  { id: '3', name: 'Joshim Uddin', status: 'Active', phone: '01700000003', joinDate: 'Mar 2024', totalPaid: 140000, due: 10000 },
-  { id: '4', name: 'Tuhin Alam', status: 'Active', phone: '01700000004', joinDate: 'Jan 2024', totalPaid: 150000, due: 0 },
-  { id: '5', name: 'Nazmul Hosain', status: 'Active', phone: '01700000005', joinDate: 'Apr 2024', totalPaid: 130000, due: 0 },
-  { id: '6', name: 'Deloar Hosain', status: 'Active', phone: '01700000006', joinDate: 'Jan 2024', totalPaid: 155000, due: 0 },
-  { id: '7', name: 'Zahid Hosain', status: 'Active', phone: '01700000007', joinDate: 'May 2024', totalPaid: 120000, due: 0 },
-  { id: '8', name: 'Rasel Haider', status: 'Active', phone: '01700000008', joinDate: 'Jan 2024', totalPaid: 150000, due: 0 },
-  { id: '9', name: 'Shariful Islam', status: 'Active', phone: '01700000009', joinDate: 'Jun 2024', totalPaid: 110000, due: 0 },
-];
+import { shareholderService } from '@/services/shareholders';
+import { Shareholder } from '@/types';
+import { toast } from 'sonner';
 
 export default function Shareholders() {
   const { user } = useAuthStore();
+  const [shareholders, setShareholders] = useState<Shareholder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUser, setSelectedUser] = useState<Shareholder | null>(null);
+  
+  // Create Modal State
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newShareholder, setNewShareholder] = useState({
+    fullName: '',
+    phone: '',
+    joinDate: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+    status: 'Active' as const,
+    totalPaid: 0,
+    due: 0
+  });
 
-  const filteredShareholders = initialShareholders.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase());
+  useEffect(() => {
+    loadShareholders();
+  }, []);
+
+  const loadShareholders = async () => {
+    setLoading(true);
+    try {
+      const data = await shareholderService.getAll();
+      setShareholders(data);
+    } catch (error) {
+      toast.error("Failed to load shareholders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await shareholderService.create(newShareholder);
+      toast.success("Shareholder added successfully");
+      setIsCreateOpen(false);
+      loadShareholders();
+      setNewShareholder({
+        fullName: '',
+        phone: '',
+        joinDate: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        status: 'Active',
+        totalPaid: 0,
+        due: 0
+      });
+    } catch (error) {
+      toast.error("Failed to add shareholder");
+    }
+  };
+
+  const filteredShareholders = shareholders.filter(s => {
+    const matchesSearch = s.fullName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTab = activeTab === 'all' || s.status.toLowerCase() === activeTab;
     return matchesSearch && matchesTab;
   });
@@ -64,13 +114,50 @@ export default function Shareholders() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Community Shareholders</h2>
-          <p className="text-slate-500 font-medium font-bengali">Manage and view all shareholder profiles and history.</p>
+          <p className="text-slate-500 font-medium">Manage and view all shareholder profiles and history.</p>
         </div>
         {user?.role === 'Admin' && (
-          <Button className="rounded-xl shadow-lg shadow-primary/20 gap-2">
-            <UserPlus size={18} />
-            Add Shareholder
-          </Button>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="rounded-xl shadow-lg shadow-primary/20 gap-2">
+                <UserPlus size={18} />
+                Add Shareholder
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] rounded-3xl">
+              <DialogHeader>
+                <DialogTitle>Add New Shareholder</DialogTitle>
+                <DialogDescription>
+                  Enter the details of the new shareholder below.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input 
+                    id="name" 
+                    value={newShareholder.fullName} 
+                    onChange={e => setNewShareholder({...newShareholder, fullName: e.target.value})} 
+                    placeholder="Mostafizur Rahman" 
+                    required 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input 
+                    id="phone" 
+                    value={newShareholder.phone} 
+                    onChange={e => setNewShareholder({...newShareholder, phone: e.target.value})} 
+                    placeholder="017xxxx" 
+                    required 
+                  />
+                </div>
+                <DialogFooter>
+                  <Button type="submit" className="w-full">Create Shareholder</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
 
@@ -97,58 +184,70 @@ export default function Shareholders() {
              </Tabs>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-            <AnimatePresence>
-              {filteredShareholders.map((s) => (
-                <motion.div
-                  key={s.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  whileHover={{ y: -4 }}
-                  className={`
-                    group bg-white p-6 rounded-3xl border transition-all cursor-pointer shadow-sm
-                    ${selectedUser?.id === s.id ? 'border-primary ring-1 ring-primary/20 shadow-xl' : 'border-slate-100 hover:shadow-lg'}
-                  `}
-                  onClick={() => setSelectedUser(s)}
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <Avatar className="w-14 h-14 rounded-2xl border-2 border-white shadow-sm">
-                      <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${s.name}`} />
-                      <AvatarFallback>{s.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "rounded-full -mr-2")}>
-                        <MoreVertical size={18} className="text-slate-400" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-xl border-slate-100 shadow-xl">
-                        <DropdownMenuItem className="rounded-lg font-bold">Edit Profile</DropdownMenuItem>
-                        <DropdownMenuItem className="rounded-lg font-bold">Financial Logs</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="rounded-lg font-bold text-rose-600">Disable Access</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  
-                  <div className="space-y-1 mb-6">
-                    <h4 className="font-black text-lg text-slate-900 tracking-tight leading-tight">{s.name}</h4>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{s.joinDate}</p>
-                  </div>
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="animate-spin text-primary" size={32} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              <AnimatePresence>
+                {filteredShareholders.map((s) => (
+                  <motion.div
+                    key={s.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    whileHover={{ y: -4 }}
+                    className={`
+                      group bg-white p-6 rounded-3xl border transition-all cursor-pointer shadow-sm
+                      ${selectedUser?.id === s.id ? 'border-primary ring-1 ring-primary/20 shadow-xl' : 'border-slate-100 hover:shadow-lg'}
+                    `}
+                    onClick={() => setSelectedUser(s)}
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <Avatar className="w-14 h-14 rounded-2xl border-2 border-white shadow-sm">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${s.fullName}`} />
+                        <AvatarFallback>{s.fullName[0]}</AvatarFallback>
+                      </Avatar>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "rounded-full -mr-2")}>
+                          <MoreVertical size={18} className="text-slate-400" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-xl border-slate-100 shadow-xl">
+                          <DropdownMenuItem className="rounded-lg font-bold">Edit Profile</DropdownMenuItem>
+                          <DropdownMenuItem className="rounded-lg font-bold">Financial Logs</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="rounded-lg font-bold text-rose-600">Disable Access</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    
+                    <div className="space-y-1 mb-6">
+                      <h4 className="font-black text-lg text-slate-900 tracking-tight leading-tight">{s.fullName}</h4>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{s.joinDate}</p>
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Paid</p>
-                      <p className="text-md font-black text-emerald-600">৳ {s.totalPaid.toLocaleString()}</p>
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Paid</p>
+                        <p className="text-md font-black text-emerald-600">৳ {(s.totalPaid || 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Due Amount</p>
+                        <p className={`text-md font-black ${(s.due || 0) > 0 ? 'text-rose-600' : 'text-slate-400'}`}>৳ {(s.due || 0).toLocaleString()}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Due Amount</p>
-                      <p className={`text-md font-black ${s.due > 0 ? 'text-rose-600' : 'text-slate-400'}`}>৳ {s.due.toLocaleString()}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              {filteredShareholders.length === 0 && (
+                <div className="col-span-full py-12 text-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">
+                   <Users className="mx-auto mb-2 opacity-20" size={48} />
+                   <p className="font-bold">No shareholders found.</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Column: Detailed View */}
@@ -175,11 +274,11 @@ export default function Shareholders() {
                   </div>
                   <CardContent className="px-6 pb-8 -mt-12 text-center relative z-10">
                     <Avatar className="w-24 h-24 rounded-3xl border-4 border-white shadow-xl mx-auto mb-4 bg-white">
-                      <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.name}`} />
-                      <AvatarFallback className="text-2xl font-black">{selectedUser.name[0]}</AvatarFallback>
+                      <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.fullName}`} />
+                      <AvatarFallback className="text-2xl font-black">{selectedUser.fullName[0]}</AvatarFallback>
                     </Avatar>
                     
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{selectedUser.name}</h3>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{selectedUser.fullName}</h3>
                     <Badge className="mt-2 rounded-lg py-1 px-3 bg-emerald-50 text-emerald-600 hover:bg-emerald-50 border-none">Active Shareholder</Badge>
 
                     <div className="grid grid-cols-1 gap-4 mt-8 text-left">
@@ -205,14 +304,14 @@ export default function Shareholders() {
                           <TrendingUp size={16} className="text-emerald-500" />
                           <span className="text-sm font-bold text-slate-600">Total Profits</span>
                         </div>
-                        <span className="text-sm font-black text-emerald-600">৳ 7,500</span>
+                        <span className="text-sm font-black text-emerald-600">৳ 0</span>
                       </div>
                       <div className="flex items-center justify-between p-2">
                         <div className="flex items-center gap-2">
                           <AlertCircle size={16} className="text-rose-500" />
                           <span className="text-sm font-bold text-slate-600">Fine History</span>
                         </div>
-                        <span className="text-sm font-black text-rose-600">৳ 500</span>
+                        <span className="text-sm font-black text-rose-600">৳ 0</span>
                       </div>
                     </div>
 
