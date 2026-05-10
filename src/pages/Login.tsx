@@ -37,27 +37,37 @@ export default function Login() {
         const userDoc = await getDoc(userDocRef);
 
         if (userDoc.exists()) {
+          const isSystemAdmin = email.toLowerCase() === 'mostafizofficial@gmail.com';
           const userData = userDoc.data();
+          const role = isSystemAdmin ? UserRole.ADMIN : (userData.role as UserRole || UserRole.USER);
+
           setUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
             fullName: userData.fullName || 'User',
-            role: userData.role as UserRole || UserRole.USER,
+            role: role,
             photoURL: firebaseUser.photoURL || undefined
           });
-          toast.success(`Welcome back, ${userData.fullName || 'User'}!`);
+          
+          // Force update admin role in DB if it's the specific email
+          if (isSystemAdmin && userData.role !== UserRole.ADMIN) {
+            await setDoc(userDocRef, { ...userData, role: UserRole.ADMIN }, { merge: true });
+          }
+
+          toast.success(`Welcome back, ${userData.fullName || 'User'}!${isSystemAdmin ? ' (Admin)' : ''}`);
         } else {
           // Fallback: Create a basic user doc if it doesn't exist
+          const isSystemAdmin = email.toLowerCase() === 'mostafizofficial@gmail.com';
           const newUserProfile = {
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
             fullName: firebaseUser.displayName || email.split('@')[0],
-            role: UserRole.USER,
+            role: isSystemAdmin ? UserRole.ADMIN : UserRole.USER,
           };
           
           await setDoc(userDocRef, newUserProfile);
           setUser(newUserProfile);
-          toast.success('Welcome! Your profile has been initialized.');
+          toast.success(`Welcome! Your profile has been initialized${isSystemAdmin ? ' as Admin' : ''}.`);
         }
       } else {
         // Sign Up Logic
@@ -67,16 +77,17 @@ export default function Login() {
 
         await updateProfile(firebaseUser, { displayName: fullName });
 
+        const isSystemAdmin = email.toLowerCase() === 'mostafizofficial@gmail.com';
         const newUserProfile = {
           uid: firebaseUser.uid,
           email: firebaseUser.email || '',
           fullName: fullName,
-          role: UserRole.USER,
+          role: isSystemAdmin ? UserRole.ADMIN : UserRole.USER,
         };
 
         await setDoc(doc(db, 'users', firebaseUser.uid), newUserProfile);
         setUser(newUserProfile);
-        toast.success('Account created successfully! Welcome to INFRIDE.');
+        toast.success(`Account created successfully! Welcome to INFRIDE${isSystemAdmin ? ' Admin' : ''}.`);
       }
       
       navigate('/');
