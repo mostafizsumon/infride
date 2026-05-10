@@ -1,9 +1,10 @@
-const firebaseConfig = {
-  apiKey: "AIzaSyA8wSt6j8o9_lLlaQktlh2AG8VzzweMg2M",
-  authDomain: "infride-4fe7b.firebaseapp.com",
-  projectId: "infride-4fe7b",
-  storageBucket: "infride-4fe7b.firebasestorage.app",
-  messagingSenderId: "257052886796",
-  appId: "1:257052886796:web:b047860082d651620a2b29",
-  measurementId: "G-0FZF8LQC71"
-};
+{
+  "projectId": "infride-4fe7b",
+  "appId": "1:257052886796:web:e415f7b3f63326e60a2b29",
+  "apiKey": "AIzaSyA8wSt6j8o9_lLlaQktlh2AG8VzzweMg2M",
+  "authDomain": "infride-4fe7b.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-34c206f7-5f6d-4e5b-b436-3f005855800c",
+  "storageBucket": "infride-4fe7b.firebasestorage.app",
+  "messagingSenderId": "257052886796",
+  "measurementId": ""
+}
