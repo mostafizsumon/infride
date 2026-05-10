@@ -7,39 +7,69 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/useAuthStore';
 import { UserRole } from '@/types';
-import { Lock, Mail, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { setUser } = useAuthStore();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    // Demo Login Logic
-    if (email === 'admin@infride.com' && password === 'admin123') {
-      setUser({
-        uid: '1',
-        email: email,
-        fullName: 'Admin Mostafizur',
-        role: UserRole.ADMIN
-      });
-      toast.success('Welcome back, Admin!');
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+
+      // Fetch user profile from Firestore
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          fullName: userData.fullName || 'User',
+          role: userData.role as UserRole || UserRole.USER,
+          photoURL: firebaseUser.photoURL || undefined
+        });
+        toast.success(`Welcome back, ${userData.fullName || 'User'}!`);
+      } else {
+        // Fallback: Create a basic user doc if it doesn't exist
+        const newUserProfile = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          fullName: firebaseUser.displayName || email.split('@')[0],
+          role: UserRole.USER,
+        };
+        
+        await setDoc(userDocRef, newUserProfile);
+        setUser(newUserProfile);
+        toast.success('Welcome! Your profile has been initialized.');
+      }
+      
       navigate('/');
-    } else if (email === 'user@infride.com' && password === 'user123') {
-      setUser({
-        uid: '2',
-        email: email,
-        fullName: 'Shareholder User',
-        role: UserRole.USER
-      });
-      toast.success('Login successful');
-      navigate('/');
-    } else {
-      toast.error('Invalid credentials. Use admin@infride.com / admin123');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      let message = 'Invalid credentials. Please try again.';
+      
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        message = 'Invalid email or password.';
+      } else if (error.code === 'auth/too-many-requests') {
+        message = 'Too many failed login attempts. Please try again later.';
+      }
+      
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -93,15 +123,18 @@ export default function Login() {
                   />
                 </div>
               </div>
-              <Button type="submit" className="w-full h-12 rounded-xl text-md font-bold shadow-lg shadow-primary/25 transition-all hover:scale-[1.02] active:scale-[0.98]">
-                Unlock Dashboard
+              <Button 
+                type="submit" 
+                className="w-full h-12 rounded-xl text-md font-bold shadow-lg shadow-primary/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? <Loader2 className="animate-spin" /> : 'Unlock Dashboard'}
               </Button>
             </form>
           </CardContent>
           <CardFooter className="bg-slate-50 border-t border-slate-100 p-6 flex flex-col gap-4">
-            <div className="text-xs text-slate-400 flex flex-col gap-1 items-center">
-               <span>Demo Credentials:</span>
-               <code className="bg-white px-2 py-1 rounded border border-slate-200">admin@infride.com / admin123</code>
+            <div className="text-xs text-slate-400 text-center">
+               Please use your registered email and password to sign in.
             </div>
           </CardFooter>
         </Card>
