@@ -14,57 +14,84 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
 export default function Login() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { setUser } = useAuthStore();
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const firebaseUser = userCredential.user;
+      if (isLogin) {
+        // Login Logic
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const firebaseUser = userCredential.user;
 
-      // Fetch user profile from Firestore
-      const userDocRef = doc(db, 'users', firebaseUser.uid);
-      const userDoc = await getDoc(userDocRef);
+        // Fetch user profile from Firestore
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
 
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email || '',
-          fullName: userData.fullName || 'User',
-          role: userData.role as UserRole || UserRole.USER,
-          photoURL: firebaseUser.photoURL || undefined
-        });
-        toast.success(`Welcome back, ${userData.fullName || 'User'}!`);
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            fullName: userData.fullName || 'User',
+            role: userData.role as UserRole || UserRole.USER,
+            photoURL: firebaseUser.photoURL || undefined
+          });
+          toast.success(`Welcome back, ${userData.fullName || 'User'}!`);
+        } else {
+          // Fallback: Create a basic user doc if it doesn't exist
+          const newUserProfile = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            fullName: firebaseUser.displayName || email.split('@')[0],
+            role: UserRole.USER,
+          };
+          
+          await setDoc(userDocRef, newUserProfile);
+          setUser(newUserProfile);
+          toast.success('Welcome! Your profile has been initialized.');
+        }
       } else {
-        // Fallback: Create a basic user doc if it doesn't exist
+        // Sign Up Logic
+        const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const firebaseUser = userCredential.user;
+
+        await updateProfile(firebaseUser, { displayName: fullName });
+
         const newUserProfile = {
           uid: firebaseUser.uid,
           email: firebaseUser.email || '',
-          fullName: firebaseUser.displayName || email.split('@')[0],
+          fullName: fullName,
           role: UserRole.USER,
         };
-        
-        await setDoc(userDocRef, newUserProfile);
+
+        await setDoc(doc(db, 'users', firebaseUser.uid), newUserProfile);
         setUser(newUserProfile);
-        toast.success('Welcome! Your profile has been initialized.');
+        toast.success('Account created successfully! Welcome to INFRIDE.');
       }
       
       navigate('/');
     } catch (error: any) {
-      console.error('Login error:', error);
-      let message = 'Invalid credentials. Please try again.';
+      console.error('Auth error:', error);
+      let message = 'An error occurred. Please try again.';
       
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         message = 'Invalid email or password.';
+      } else if (error.code === 'auth/email-already-in-use') {
+        message = 'This email is already registered.';
       } else if (error.code === 'auth/too-many-requests') {
-        message = 'Too many failed login attempts. Please try again later.';
+        message = 'Too many attempts. Please try again later.';
+      } else if (error.code === 'auth/weak-password') {
+        message = 'Password should be at least 6 characters.';
       }
       
       toast.error(message);
@@ -88,11 +115,30 @@ export default function Login() {
 
         <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-3xl overflow-hidden">
           <CardHeader className="bg-white pb-2 pt-8">
-            <CardTitle className="text-2xl font-bold text-slate-900">Sign In</CardTitle>
-            <CardDescription className="text-slate-500">Access your investment dashboard</CardDescription>
+            <CardTitle className="text-2xl font-bold text-slate-900">{isLogin ? 'Sign In' : 'Create Account'}</CardTitle>
+            <CardDescription className="text-slate-500">
+              {isLogin ? 'Access your investment dashboard' : 'Join the transparent investment community'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="bg-white p-8">
-            <form onSubmit={handleLogin} className="space-y-5">
+            <form onSubmit={handleAuth} className="space-y-5">
+              {!isLogin && (
+                <div className="space-y-2 text-left">
+                  <Label htmlFor="fullName" className="text-xs font-bold text-slate-600 uppercase tracking-wider px-1">Full Name</Label>
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-3 top-3 text-slate-400" size={18} />
+                    <Input 
+                      id="fullName" 
+                      type="text" 
+                      placeholder="John Doe" 
+                      className="pl-10 h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-primary focus:ring-offset-0"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required={!isLogin}
+                    />
+                  </div>
+                </div>
+              )}
               <div className="space-y-2 text-left">
                 <Label htmlFor="email" className="text-xs font-bold text-slate-600 uppercase tracking-wider px-1">Email Address</Label>
                 <div className="relative">
@@ -128,13 +174,19 @@ export default function Login() {
                 className="w-full h-12 rounded-xl text-md font-bold shadow-lg shadow-primary/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? <Loader2 className="animate-spin" /> : 'Unlock Dashboard'}
+                {isSubmitting ? <Loader2 className="animate-spin" /> : (isLogin ? 'Unlock Dashboard' : 'Register Now')}
               </Button>
             </form>
           </CardContent>
           <CardFooter className="bg-slate-50 border-t border-slate-100 p-6 flex flex-col gap-4">
-            <div className="text-xs text-slate-400 text-center">
-               Please use your registered email and password to sign in.
+            <div className="text-sm text-slate-600 text-center">
+               {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
+               <button 
+                 onClick={() => setIsLogin(!isLogin)}
+                 className="text-primary font-bold hover:underline"
+               >
+                 {isLogin ? 'Sign Up' : 'Sign In'}
+               </button>
             </div>
           </CardFooter>
         </Card>
